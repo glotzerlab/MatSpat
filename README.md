@@ -15,6 +15,6 @@ Converting static histology slides into radial sequences from the specified core
 Computation of partial correlation coefficients 
 Sequence modeling with radial sequences using Hidden Markov Models and more deep learning methods
 
-#Output
+# Output
 Classification, Changepoint Detection, and further analysis of quantile-discretized radial sequences 
 from spatially aware data.
