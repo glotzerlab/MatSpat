@@ -1,0 +1,25 @@
+# MatSpat Development Dependencies
+
+# Include runtime dependencies
+-r requirements.txt
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=3.0.0
+
+# Code quality
+black>=22.0.0
+ruff>=0.1.0
+mypy>=0.950
+pre-commit>=3.0.0
+tox>=4.0.0
+
+# Documentation
+sphinx>=4.5.0
+sphinx-rtd-theme>=1.0.0
+
+# Jupyter support (for exploratory analysis)
+jupyter>=1.0.0
+ipython>=8.0.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
