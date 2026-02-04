@@ -1,15 +1,7 @@
 # MatSpat Runtime Dependencies
+# Install with: pip install -r requirements.txt
 
-# Core numerical and data manipulation
-numpy>=1.21.0
-pandas>=1.3.0
+-e .
 
-# Scientific computing
-scipy>=1.7.0
-scikit-learn>=1.0.0
-
-# Hidden Markov Models
-hmmlearn>=0.2.7
-
-# Materials science spatial descriptors (optional but recommended for partial correlations)
-freud>=0.11.0
+# Note: freud must be installed separately via conda/mamba:
+#   mamba install -c conda-forge freud

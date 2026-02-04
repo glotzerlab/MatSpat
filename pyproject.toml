@@ -47,7 +47,7 @@ where = ["src"]
 # Black configuration
 [tool.black]
 line-length = 100
-target-version = ["py39", "py310", "py311"]
+target-version = ["py39", "py310", "py311", "py312"]
 exclude = '''
 /(
     \.git
@@ -76,6 +76,8 @@ exclude = [
     "build",
     "dist",
 ]
+
+[tool.ruff.lint]
 select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
@@ -93,11 +95,11 @@ ignore = [
     "N806",   # Variable in function should be lowercase (allows X, Y in scientific code)
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Allow unused imports in __init__
 "tests/*" = ["D"]         # Disable docstring checks for tests
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "google"
 
 # Mypy configuration
