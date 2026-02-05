@@ -221,7 +221,7 @@ def _process_image_id(df: pd.DataFrame, image_id_col: str | None) -> pd.Series:
     Returns:
     -------
     pd.Series
-        Job ID series
+        Image ID series
 
     Warns:
     -----
@@ -250,7 +250,7 @@ def load_spatial_data(
     cell_id_col: str | None = None,
     # Optional: pathology (omitted from output if not provided)
     pathology_col: str | None = None,
-    # Optional: image_id (auto-generated as "job_1" if not provided, with warning)
+    # Optional: image_id (auto-generated as "image_1" if not provided, with warning)
     image_id_col: str | None = None,
     # Optional: patient_id
     patient_id_col: str | None = None,
@@ -286,7 +286,7 @@ def load_spatial_data(
     pathology_col : str | None, optional
         Column name for pathology/disease type (omitted if None)
     image_id_col : str | None, optional
-        Column name for job/image ID (auto-generated as "job_1" if None)
+        Column name for image/sample ID (auto-generated as "image_1" if None)
     patient_id_col : str | None, optional
         Column name for patient ID (omitted if None)
 
