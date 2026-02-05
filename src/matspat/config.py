@@ -1,4 +1,4 @@
-"""Configuration settings for MatSpat."""
+"""Configuration settings for MatSpat: grid sizes, bandwidths, default parameters."""
 
 
 def get_default_config() -> dict:

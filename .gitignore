@@ -206,7 +206,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Claude Code - personal configuration (not shared)
+# Claude Code - personal configuration for Anthropic's Claude AI coding assistant
 .claude/
 
 # Old reference code (not part of active project)
