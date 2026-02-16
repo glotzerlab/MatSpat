@@ -6,6 +6,7 @@ Functions: compute_local_density(), compute_katic_order(), count_neighbor_cell_t
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 
 import freud
 import numpy as np
@@ -13,6 +14,53 @@ import pandas as pd
 
 from . import _freud_helpers as fh
 from . import _validation as val
+
+
+def _apply_per_image(
+    df: pd.DataFrame,
+    image_id_col: str,
+    process_func: Callable[[pd.DataFrame], pd.DataFrame | None],
+    output_cols: list[str],
+) -> pd.DataFrame:
+    """Apply a per-image processing function and combine results.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame with an image ID column.
+    image_id_col : str
+        Column name to group by.
+    process_func : Callable[[pd.DataFrame], pd.DataFrame | None]
+        Function that processes a single image DataFrame.
+        Returns a DataFrame of results or None to skip.
+    output_cols : list[str]
+        Final column order (also used for empty DataFrame schema).
+
+    Returns
+    -------
+    pd.DataFrame
+        Combined results across all images.
+    """
+    results = []
+
+    for image_id, image_df in df.groupby(image_id_col):
+        result = process_func(image_df)
+        if result is not None:
+            result[image_id_col] = image_id
+            results.append(result)
+
+    if not results:
+        warnings.warn(
+            "No valid images found (all had < 2 cells after filtering)",
+            UserWarning,
+            stacklevel=3,
+        )
+        return pd.DataFrame(columns=output_cols)
+
+    output_df = pd.concat(results, ignore_index=True)
+    output_df = output_df[output_cols]
+
+    return output_df
 
 
 def compute_local_density(
@@ -120,11 +168,9 @@ def compute_local_density(
     val.validate_dataframe_columns(df, required_cols)
     val.validate_cell_types(df, cell_type_col, focus_cell_type, include_cell_types)
 
-    # Process per image
-    results = []
-
-    for image_id, image_df in df.groupby(image_id_col):
-        result = _compute_local_density_single_image(
+    # Build per-image processor
+    def process_image(image_df: pd.DataFrame) -> pd.DataFrame | None:
+        return _compute_local_density_single_image(
             image_df,
             r_max,
             cell_type_col=cell_type_col,
@@ -138,32 +184,11 @@ def compute_local_density(
             include_neighbor_counts=include_neighbor_counts,
         )
 
-        if result is not None:
-            result[image_id_col] = image_id
-            results.append(result)
-
-    if not results:
-        warnings.warn(
-            "No valid images found (all had < 2 cells after filtering)",
-            UserWarning,
-            stacklevel=2,
-        )
-        # Return empty DataFrame with correct columns
-        cols = ["cell_id", image_id_col, cell_type_col, "local_density"]
-        if include_neighbor_counts:
-            cols.append("num_neighbors")
-        return pd.DataFrame(columns=cols)
-
-    # Combine results
-    output_df = pd.concat(results, ignore_index=True)
-
-    # Reorder columns
-    base_cols = ["cell_id", image_id_col, cell_type_col, "local_density"]
+    output_cols = ["cell_id", image_id_col, cell_type_col, "local_density"]
     if include_neighbor_counts:
-        base_cols.append("num_neighbors")
-    output_df = output_df[base_cols]
+        output_cols.append("num_neighbors")
 
-    return output_df
+    return _apply_per_image(df, image_id_col, process_image, output_cols)
 
 
 def _compute_local_density_single_image(
@@ -344,11 +369,9 @@ def compute_katic_order(
     val.validate_dataframe_columns(df, required_cols)
     val.validate_cell_types(df, cell_type_col, focus_cell_type, include_cell_types)
 
-    # Process per image
-    results = []
-
-    for image_id, image_df in df.groupby(image_id_col):
-        result = _compute_katic_order_single_image(
+    # Build per-image processor
+    def process_image(image_df: pd.DataFrame) -> pd.DataFrame | None:
+        return _compute_katic_order_single_image(
             image_df,
             k_list,
             r_max,
@@ -361,29 +384,10 @@ def compute_katic_order(
             neighbor_mode=neighbor_mode,
         )
 
-        if result is not None:
-            result[image_id_col] = image_id
-            results.append(result)
+    output_cols = ["cell_id", image_id_col, cell_type_col]
+    output_cols += [f"psi_{ki}" for ki in k_list]
 
-    if not results:
-        warnings.warn(
-            "No valid images found (all had < 2 cells after filtering)",
-            UserWarning,
-            stacklevel=2,
-        )
-        # Return empty DataFrame with correct columns
-        cols = ["cell_id", image_id_col, cell_type_col] + [f"psi_{ki}" for ki in k_list]
-        return pd.DataFrame(columns=cols)
-
-    # Combine results
-    output_df = pd.concat(results, ignore_index=True)
-
-    # Reorder columns
-    base_cols = ["cell_id", image_id_col, cell_type_col]
-    psi_cols = [f"psi_{ki}" for ki in k_list]
-    output_df = output_df[base_cols + psi_cols]
-
-    return output_df
+    return _apply_per_image(df, image_id_col, process_image, output_cols)
 
 
 def _compute_katic_order_single_image(
@@ -538,11 +542,9 @@ def count_neighbor_cell_types(
     else:
         types_to_count = sorted(df[cell_type_col].unique())
 
-    # Process per image
-    results = []
-
-    for image_id, image_df in df.groupby(image_id_col):
-        result = _count_neighbor_cell_types_single_image(
+    # Build per-image processor
+    def process_image(image_df: pd.DataFrame) -> pd.DataFrame | None:
+        return _count_neighbor_cell_types_single_image(
             image_df,
             r_max,
             types_to_count,
@@ -554,30 +556,10 @@ def count_neighbor_cell_types(
             Ly=Ly,
         )
 
-        if result is not None:
-            result[image_id_col] = image_id
-            results.append(result)
+    output_cols = ["cell_id", image_id_col, cell_type_col]
+    output_cols += [f"n_neighbors_{t}" for t in types_to_count]
 
-    if not results:
-        warnings.warn(
-            "No valid images found (all had < 2 cells after filtering)",
-            UserWarning,
-            stacklevel=2,
-        )
-        # Return empty DataFrame with correct columns
-        cols = ["cell_id", image_id_col, cell_type_col]
-        cols += [f"n_neighbors_{t}" for t in types_to_count]
-        return pd.DataFrame(columns=cols)
-
-    # Combine results
-    output_df = pd.concat(results, ignore_index=True)
-
-    # Reorder columns
-    base_cols = ["cell_id", image_id_col, cell_type_col]
-    count_cols = [f"n_neighbors_{t}" for t in types_to_count]
-    output_df = output_df[base_cols + count_cols]
-
-    return output_df
+    return _apply_per_image(df, image_id_col, process_image, output_cols)
 
 
 def _count_neighbor_cell_types_single_image(
