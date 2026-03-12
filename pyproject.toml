@@ -91,6 +91,7 @@ ignore = [
     "D100",   # Missing module docstring
     "D104",   # Missing public package docstring
     "E501",   # Line too long (black handles this)
+    "N802",   # Function name should be lowercase (allows lees_L, etc.)
     "N803",   # Argument name should be lowercase (allows x, y, L, etc.)
     "N806",   # Variable in function should be lowercase (allows X, Y in scientific code)
 ]
