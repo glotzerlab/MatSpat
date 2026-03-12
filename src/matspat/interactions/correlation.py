@@ -6,7 +6,7 @@ Public functions:
 """
 
 import numpy as np
-
+from scipy.spatial.distance import cdist
 # ---------------------------------------------------------------------------
 # Private helper
 # ---------------------------------------------------------------------------
@@ -23,13 +23,12 @@ def _bisquare_kernel(distances: np.ndarray, bandwidth: float) -> np.ndarray:
         (N, N) weight matrix.
 
         W_ij = (1 - (d_ij / h)^2)^2   if d_ij <= h,  else 0
-
-    Pseudocode:
-        Compute weights from the formula above
-        Zero out entries where distance exceeds bandwidth
-        Return weight matrix
     """
-    raise NotImplementedError
+    weight_matrix = np.zeros_like(distances)
+    mask = distances <= bandwidth
+    weight_matrix[mask] = (1 - (distances[mask] / bandwidth)**2)**2
+    return weight_matrix
+
 
 
 # ---------------------------------------------------------------------------
@@ -56,15 +55,25 @@ def lees_L(x: np.ndarray, y: np.ndarray, positions: np.ndarray, bandwidth: float
 
     Returns:
         Lee's L value in [-1, 1], or nan if fewer than 2 points or denominator is zero.
-
-    Pseudocode:
-        Guard: return nan if fewer than 2 points
-        Mean-center x and y
-        Build kernel matrix W from pairwise distances between positions
-        Compute numerator and denominator using the formula above
-        Return numerator / denominator (or nan if denominator is zero)
     """
-    raise NotImplementedError
+    if len(x) < 2:
+        return np.nan
+    
+    x_centered = x - np.mean(x)
+    y_centered = y - np.mean(y)
+    distances = scipy.spatial.distance.cdist(positions, positions, metric='euclidean')
+    W = _bisquare_kernel(distances, bandwidth)
+    numerator = np.sum(W * np.outer(x_centered, y_centered))
+    x_denom = np.sqrt(np.sum(W * np.outer(x_centered, x_centered)))
+    y_denom = np.sqrt(np.sum(W * np.outer(y_centered, y_centered)))
+    if x_denom * y_denom == 0:
+        return np.nan
+    else:
+        L = numerator / (x_denom * y_denom)
+    return L
+
+    
+
 
 
 def lees_L_sequence(
