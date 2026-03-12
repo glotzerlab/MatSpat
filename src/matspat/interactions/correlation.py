@@ -6,7 +6,7 @@ Public functions:
 """
 
 import numpy as np
-from scipy.spatial.distance import cdist
+from scipy.spatial import distance
 # ---------------------------------------------------------------------------
 # Private helper
 # ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ def lees_L(x: np.ndarray, y: np.ndarray, positions: np.ndarray, bandwidth: float
     
     x_centered = x - np.mean(x)
     y_centered = y - np.mean(y)
-    distances = scipy.spatial.distance.cdist(positions, positions, metric='euclidean')
+    distances = distance.cdist(positions, positions, metric='euclidean')
     W = _bisquare_kernel(distances, bandwidth)
     numerator = np.sum(W * np.outer(x_centered, y_centered))
     x_denom = np.sqrt(np.sum(W * np.outer(x_centered, x_centered)))
