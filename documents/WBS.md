@@ -60,3 +60,12 @@
 **Task 4:** Implement Sequence Models
 - Deliverable: runnable HMM wrapper on sequences with different parameters for various masks
 - Done when: Returns a validated test/train accruacy on the dataset
+---
+
+## Activity 5: Tutorial, Demo, and Report Writing
+**Task 1: Tutorial Development**
+- Deliverable: jupyter notebook that runs on sample dataset, with examples of different pipelines.
+- Done when: pipeline executes succesfully with various parameter changes
+**Task 2: Demo and Report Writing**
+- Deliverable: Demonstration slides and final report with details of each module
+- Done when: in-class demonstration complete, with reviewed final report submitted.
