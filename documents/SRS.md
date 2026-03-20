@@ -208,4 +208,4 @@ Open-source project, but funded via the Propelling Original Data Science Program
 
 **Document Control:**
 - **Created By:** Specifications written by Ninad Kamath. Formatting done using GenAI (Claude), following geekforgeeks website for the outline formatting. 
-- **Next Update:** After initial feature implementation 
+- **Next Update:** After tutorial has been written, and initial testing has begun using full dataset.
