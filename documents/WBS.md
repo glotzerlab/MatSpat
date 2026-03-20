@@ -43,7 +43,7 @@
 - Done when: Correlations between -1 to 1, works on simulated data with all sorts of associations
 ---
 
-## Activity 4: KDE and Quantilization
+## Activity 4: KDE and Quantilization, Markov Sequence Modeling
 
 **Task 1:** Implement grid-based KDE computation
 - Deliverable: Function computing density grid for cell types
@@ -56,3 +56,7 @@
 **Task 3:** Implement cumulative quantile binning
 - Deliverable: Function returning cumulative density masks
 - Done when: Returns masks up to each quantile, handles edge cases (0th/100th percentile)
+
+**Task 4:** Implement Sequence Models
+- Deliverable: runnable HMM wrapper on sequences with different parameters for various masks
+- Done when: Returns a validated test/train accruacy on the dataset
