@@ -186,7 +186,7 @@ MatSpat provides the following core capabilities:
 - **Week 1-2:** Project infrastructure, data loader implementation (CURRENT)
 - **Week 3-4:** Spatial descriptors and KDE functionality
 - **Week 5-6:** Partial correlation computation
-- **Week 7-8:** HMM sequence modeling and classification
+- **Week 7-8:** HMM sequence modeling and classification, **and start writing tutorial notebooks**
 - **Week 9-10:** Testing, documentation, validation on full datasets
 
 ### 8.2 Budget
