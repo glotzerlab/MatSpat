@@ -187,7 +187,8 @@ MatSpat provides the following core capabilities:
 - **Week 3-4:** Spatial descriptors and KDE functionality
 - **Week 5-6:** Partial correlation computation
 - **Week 7-8:** HMM sequence modeling and classification, **and start writing tutorial notebooks**
-- **Week 9-10:** Testing, documentation, validation on full datasets
+- **Week 9-10:** Testing, documentation, validation on full datasets, demonstration development
+- **Week 10-11:** Project report / paper write-up
 
 ### 8.2 Budget
 Open-source project, but funded via the Propelling Original Data Science Program by the Michigan Institute of Data, AI, and Society (Grant ID: 2578). Development time estimated at 9-12 weeks over the course of BIOINF 576 for the core functionality, but additional functionality added in the Sumemer Semester. 
