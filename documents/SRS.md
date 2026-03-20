@@ -1,8 +1,8 @@
 # Software Requirements Specification (SRS)
 ## MatSpat - Material Analysis of Spatially Resolved Histology Images
 
-**Version:** 0.1.0
-**Date:** 2026-02-04
+**Version:** 0.3.0
+**Date:** 2026-03-20
 **Author:** Ninad Kamath
 **Status:** Initial Development
 
