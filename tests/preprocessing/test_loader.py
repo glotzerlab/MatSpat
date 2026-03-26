@@ -152,9 +152,9 @@ def test_minimal_load(minimal_csv: Path):
     assert df["cell_id"].dtype == int
     assert df["x"].dtype == float
     assert df["y"].dtype == float
-    assert df["cell_type"].dtype == object
+    assert pd.api.types.is_string_dtype(df["cell_type"])
     assert df["cell_type_encoded"].dtype == int
-    assert df["image_id"].dtype == object
+    assert pd.api.types.is_string_dtype(df["image_id"])
 
     # Check mapping (alphabetical order, 1-indexed)
     assert mapping == {"CD4": 1, "CD8": 2, "Tumor": 3}
@@ -310,12 +310,13 @@ def test_nan_in_optional_columns_kept_with_warning(csv_with_nans_optional: Path)
 
     # All rows should be kept
     assert len(df) == 4
-    assert df["pathology"].tolist() == [
-        "PDAC",
-        "nan",
-        "CRC",
-        "PDAC",
-    ]  # NaN converted to string "nan"
+    # NaN in optional columns is preserved as missing (pd.NA or "nan" depending
+    # on pandas version); check non-null values are correct
+    pathology_vals = df["pathology"].tolist()
+    assert pathology_vals[0] == "PDAC"
+    assert pd.isna(pathology_vals[1])
+    assert pathology_vals[2] == "CRC"
+    assert pathology_vals[3] == "PDAC"
 
 
 # ==================== cell_id Tests ====================
@@ -433,7 +434,7 @@ def test_numeric_cell_types_converted_to_string(csv_numeric_cell_types: Path):
         )
 
     # Cell types should be strings
-    assert df["cell_type"].dtype == object
+    assert pd.api.types.is_string_dtype(df["cell_type"])
     assert df["cell_type"].tolist() == ["0", "1", "2"]
 
     # Mapping should use string keys, alphabetical order
@@ -454,10 +455,10 @@ def test_explicit_type_conversions(full_csv: Path):
 
     assert df["x"].dtype == float
     assert df["y"].dtype == float
-    assert df["cell_type"].dtype == object  # string
-    assert df["image_id"].dtype == object  # string
-    assert df["pathology"].dtype == object  # string
-    assert df["patient_id"].dtype == object  # string
+    assert pd.api.types.is_string_dtype(df["cell_type"])
+    assert pd.api.types.is_string_dtype(df["image_id"])
+    assert pd.api.types.is_string_dtype(df["pathology"])
+    assert pd.api.types.is_string_dtype(df["patient_id"])
 
 
 # ==================== Edge Cases ====================
