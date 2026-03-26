@@ -2,9 +2,9 @@
 ## MatSpat - Material Analysis of Spatially Resolved Histology Images
 
 **Version:** 0.3.0
-**Date:** 2026-03-20
+**Date:** 2026-03-25
 **Author:** Ninad Kamath
-**Status:** Initial Development
+**Status:** Entering final stages of development for beta release!
 
 ---
 
