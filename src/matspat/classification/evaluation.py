@@ -10,6 +10,8 @@ from __future__ import annotations
 import numpy as np
 from sklearn.model_selection import train_test_split
 
+from matspat.config import DEFAULT_RANDOM_STATE, DEFAULT_TEST_SIZE
+
 from .hmm import ClassificationResult, classify
 
 
@@ -17,8 +19,8 @@ def split_and_classify(
     sequences: dict[str, np.ndarray],
     labels: dict[str, int],
     *,
-    test_size: float = 0.3,
-    random_state: int = 42,
+    test_size: float = DEFAULT_TEST_SIZE,
+    random_state: int = DEFAULT_RANDOM_STATE,
     stratify: bool = True,
     **classify_kwargs: object,
 ) -> ClassificationResult:

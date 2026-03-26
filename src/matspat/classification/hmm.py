@@ -23,6 +23,16 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+from matspat.config import (
+    DEFAULT_CI_ALPHA,
+    DEFAULT_COVARIANCE_TYPE,
+    DEFAULT_MAX_ITER,
+    DEFAULT_N_BOOTSTRAPS,
+    DEFAULT_N_REPLICATES,
+    DEFAULT_N_STATES,
+    DEFAULT_TOL,
+)  # noqa: E402
+
 
 @dataclass
 class ClassificationResult:
@@ -40,11 +50,11 @@ class ClassificationResult:
 def train_class_hmm(
     sequences: list[np.ndarray],
     *,
-    n_states: int = 3,
-    covariance_type: str = "full",
-    max_iter: int = 100,
-    n_replicates: int = 3,
-    tol: float = 1e-4,
+    n_states: int = DEFAULT_N_STATES,
+    covariance_type: str = DEFAULT_COVARIANCE_TYPE,
+    max_iter: int = DEFAULT_MAX_ITER,
+    n_replicates: int = DEFAULT_N_REPLICATES,
+    tol: float = DEFAULT_TOL,
 ) -> hmmlearn_hmm.GaussianHMM:
     """Fit a GaussianHMM to a list of sequences, returning the best replicate.
 
@@ -120,8 +130,8 @@ def _compute_metrics(
     y_pred: np.ndarray,
     y_prob: np.ndarray,
     *,
-    n_bootstraps: int = 1000,
-    ci_alpha: float = 0.05,
+    n_bootstraps: int = DEFAULT_N_BOOTSTRAPS,
+    ci_alpha: float = DEFAULT_CI_ALPHA,
 ) -> tuple[dict[str, float], dict[str, tuple[float, float]]]:
     """Compute classification metrics and bootstrap confidence intervals.
 
@@ -169,13 +179,13 @@ def classify(
     test_sequences: dict[str, np.ndarray],
     *,
     test_labels: dict[str, int] | None = None,
-    n_states: int | dict[int, int] = 3,
-    covariance_type: str = "full",
-    max_iter: int = 100,
-    n_replicates: int = 3,
-    tol: float = 1e-4,
-    n_bootstraps: int = 1000,
-    ci_alpha: float = 0.05,
+    n_states: int | dict[int, int] = DEFAULT_N_STATES,
+    covariance_type: str = DEFAULT_COVARIANCE_TYPE,
+    max_iter: int = DEFAULT_MAX_ITER,
+    n_replicates: int = DEFAULT_N_REPLICATES,
+    tol: float = DEFAULT_TOL,
+    n_bootstraps: int = DEFAULT_N_BOOTSTRAPS,
+    ci_alpha: float = DEFAULT_CI_ALPHA,
 ) -> ClassificationResult:
     """Train class-dependent HMMs and classify test sequences.
 

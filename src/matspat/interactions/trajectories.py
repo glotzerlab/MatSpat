@@ -18,6 +18,16 @@ import numpy as np
 import pandas as pd
 from sklearn.neighbors import KernelDensity
 
+from matspat.config import (  # noqa: F401
+    CELL_TYPE,
+    DEFAULT_GRID_SIZE,
+    IMAGE_ID,
+    IMMUNE_PAIR,
+    LEES_L,
+    QUANTILE_BIN,
+    X_ROT,
+    Y_ROT,
+)
 from matspat.density.kde import (
     build_grid,
     get_cumulative_quantile_masks,
@@ -38,11 +48,11 @@ def compute_pairwise_trajectories(
     n_quantiles: int,
     *,
     quantile_method: str = "marginal",
-    x_col: str = "x_rot",
-    y_col: str = "y_rot",
-    cell_type_col: str = "cell_type",
-    image_id_col: str = "image_id",
-    grid_size: int = 100,
+    x_col: str = X_ROT,
+    y_col: str = Y_ROT,
+    cell_type_col: str = CELL_TYPE,
+    image_id_col: str = IMAGE_ID,
+    grid_size: int = DEFAULT_GRID_SIZE,
     exclude_types: list[str] | None = None,
 ) -> pd.DataFrame:
     """Compute Lee's L trajectories for all immune cell type pairs.
@@ -195,8 +205,8 @@ def _process_image(
             rows.append(
                 {
                     image_id_col: image_id,
-                    "immune_pair": pair_label,
-                    "quantile_bin": q,
-                    "lees_L": L,
+                    IMMUNE_PAIR: pair_label,
+                    QUANTILE_BIN: q,
+                    LEES_L: L,
                 }
             )

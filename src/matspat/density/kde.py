@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 from sklearn.neighbors import KernelDensity
 
-DEFAULT_GRID_SIZE: int = 100
+from matspat.config import DEFAULT_GRID_SIZE
 
 
 def build_grid(

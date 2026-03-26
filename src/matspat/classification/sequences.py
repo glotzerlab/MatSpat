@@ -11,14 +11,16 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from matspat.config import IMAGE_ID, IMMUNE_PAIR, LABEL, LEES_L, QUANTILE_BIN
+
 
 def build_sequences(
     df: pd.DataFrame,
     *,
-    group_by: str = "image_id",
-    bin_col: str = "quantile_bin",
-    feature_col: str = "immune_pair",
-    value_col: str = "lees_L",
+    group_by: str = IMAGE_ID,
+    bin_col: str = QUANTILE_BIN,
+    feature_col: str = IMMUNE_PAIR,
+    value_col: str = LEES_L,
     exclude_features: list[str] | None = None,
     reverse: bool = False,
 ) -> tuple[dict[str, np.ndarray], list[str]]:
@@ -73,8 +75,8 @@ def build_sequences(
 def extract_labels(
     df: pd.DataFrame,
     *,
-    group_by: str = "image_id",
-    label_col: str = "label",
+    group_by: str = IMAGE_ID,
+    label_col: str = LABEL,
 ) -> dict[str, int]:
     """Extract integer class labels keyed by group, matching :func:`build_sequences`.
 
