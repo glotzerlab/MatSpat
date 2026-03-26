@@ -2,7 +2,7 @@
 
 ## Data Sources(dataset descriptions taken from paper)
 
-Pancreatic Dataset not available for public usage yet. 
+Pancreatic Dataset not available for public usage yet.
 ### Pancreatic Dataset
 Pancreatic histology samples collected at the University of Michigan Pancreatic Cancer Clinic with IRB approval. 199 biopsied tissue samples total: 56 chronic pancreatitis (CP) and 143 pancreatic ductal adenocarcinoma (PDAC). Samples underwent multiplex immunofluorescence staining to identify 5 cell types: antigen-presenting cells (APCs), cytotoxic T lymphocytes (CTLs), epithelial cells (Epi), helper T cells (Thelpers), and regulatory T cells (Tregs). DAPI nuclei staining provided 2D spatial coordinates (x, y) for each cell centroid.
 
@@ -31,6 +31,15 @@ Colorectal cancer histology samples collected by Schürch et al. with approval f
 - Pancreatic: 199 samples, ~500-1500cells per sample
 - Colorectal: 140 samples, similar cell density per sample, more gaussian distribution than pancreatic due to processing techniques.
 
+## Example Dataset (Synthetic)
+
+MatSpat includes a synthetic data generator (`matspat.sample_data.generate_sample_dataset`) for tutorials and quick demos. It produces 10 tissue images (5 per class) with two disease classes:
+
+- **"inflamed"**: Immune cells cluster near the tumor core.
+- **"excluded"**: Immune cells form a ring around the tumor, away from the core.
+
+Each image has ~120 tumor cells and ~25 each of CD4, CD8, and Macrophage (jittered ±20%), giving a 4-5x tumor-to-immune ratio. Cells are placed in a 500×500 coordinate field. Columns: `X`, `Y`, `cell_type`, `image_id`, `pathology`.
+
 ## Development Strategy
 
-**Full datasets will be used during development** as the data size is manageable for computational resources. No representative subset or simulated data is required. Final validation will utilize the complete datasets to ensure the package handles real-world multi-sample histology data effectively. There have been some talks about more kinds of this data being available soon, but I will focus on these two datasets for now. 
+**Full datasets will be used during development** as the data size is manageable for computational resources. No representative subset or simulated data is required. Final validation will utilize the complete datasets to ensure the package handles real-world multi-sample histology data effectively. There have been some talks about more kinds of this data being available soon, but I will focus on these two datasets for now.
