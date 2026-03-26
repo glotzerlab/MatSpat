@@ -1,8 +1,13 @@
-"""Pairwise immune-immune Lee's L trajectories across tumor density zones.
+"""Lee's L trajectories across tumor density zones.
 
-Computes Lee's L spatial correlation for every pair of immune cell types,
-stratified by quantile bins of the tumor density surface.  The output is a
-long-format DataFrame that plugs directly into
+Computes Lee's L spatial correlation stratified by quantile bins of the
+tumor density surface.  Supports three pairing modes:
+
+- ``"tumor_immune"`` (default): each immune type vs. tumor density
+- ``"immune_immune"``: all unordered immune–immune pairs
+- ``"all"``: both tumor–immune and immune–immune pairs
+
+The output is a long-format DataFrame that plugs directly into
 :func:`~matspat.classification.sequences.build_sequences`.
 
 Public functions:
@@ -40,6 +45,8 @@ _QUANTILE_METHODS = {
     "cumulative": get_cumulative_quantile_masks,
 }
 
+_PAIR_MODES = {"tumor_immune", "immune_immune", "all"}
+
 
 def compute_pairwise_trajectories(
     df: pd.DataFrame,
@@ -47,6 +54,7 @@ def compute_pairwise_trajectories(
     bandwidth: float,
     n_quantiles: int,
     *,
+    pair_mode: str = "tumor_immune",
     quantile_method: str = "marginal",
     x_col: str = X_ROT,
     y_col: str = Y_ROT,
@@ -55,12 +63,11 @@ def compute_pairwise_trajectories(
     grid_size: int = DEFAULT_GRID_SIZE,
     exclude_types: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Compute Lee's L trajectories for all immune cell type pairs.
+    """Compute Lee's L trajectories across the tumor density gradient.
 
     For each image, builds a shared evaluation grid from all cell coordinates,
     computes the tumor KDE to define quantile bins along the density gradient,
-    then evaluates each immune cell type's KDE on the same grid and measures
-    Lee's L between every unordered pair within each bin.
+    then evaluates KDEs on the same grid and measures Lee's L within each bin.
 
     Args:
         df: DataFrame with spatial cell data.  Must contain columns for
@@ -68,6 +75,13 @@ def compute_pairwise_trajectories(
         tumor_label: Value in *cell_type_col* that identifies tumor cells.
         bandwidth: KDE bandwidth (same spatial units as coordinates).
         n_quantiles: Number of quantile bins along the tumor density gradient.
+        pair_mode: Which pairs to compute:
+
+            - ``"tumor_immune"`` (default): Lee's L between tumor density and
+              each immune type — one trajectory per immune type.
+            - ``"immune_immune"``: Lee's L between every unordered pair of
+              immune types.
+            - ``"all"``: both tumor–immune and immune–immune pairs.
         quantile_method: ``"marginal"`` (non-overlapping equal-mass bins) or
             ``"cumulative"`` (nested regions).
         x_col: Column with x-coordinates (typically rotated).
@@ -75,28 +89,31 @@ def compute_pairwise_trajectories(
         cell_type_col: Column with cell type annotations.
         image_id_col: Column identifying each image/slide.
         grid_size: Number of grid points per axis for KDE evaluation.
-        exclude_types: Cell types to exclude from immune pair computation
-            (in addition to *tumor_label*, which is always excluded).
+        exclude_types: Cell types to exclude from pair computation
+            (in addition to *tumor_label*, which is always excluded from the
+            immune set).
 
     Returns:
         Long-format DataFrame with columns:
 
         - *image_id_col*: image identifier
-        - ``"immune_pair"``: alphabetically sorted pair label (e.g. ``"B x T"``)
+        - ``"immune_pair"``: pair label (e.g. ``"Tumor x CD4"`` or
+          ``"CD4 x CD8"``)
         - ``"quantile_bin"``: bin index (0-based)
         - ``"lees_L"``: Lee's L correlation value
 
         Ready for :func:`~matspat.classification.sequences.build_sequences`.
 
     Raises:
-        ValueError: If *quantile_method* is not ``"marginal"`` or
-            ``"cumulative"``.
+        ValueError: If *quantile_method* or *pair_mode* is invalid.
         KeyError: If required columns are missing from *df*.
     """
     if quantile_method not in _QUANTILE_METHODS:
         raise ValueError(
             f"quantile_method must be one of {set(_QUANTILE_METHODS)}, " f"got {quantile_method!r}"
         )
+    if pair_mode not in _PAIR_MODES:
+        raise ValueError(f"pair_mode must be one of {_PAIR_MODES}, got {pair_mode!r}")
 
     required_cols = {x_col, y_col, cell_type_col, image_id_col}
     missing = required_cols - set(df.columns)
@@ -117,6 +134,7 @@ def compute_pairwise_trajectories(
             tumor_label=tumor_label,
             bandwidth=bandwidth,
             n_quantiles=n_quantiles,
+            pair_mode=pair_mode,
             mask_fn=mask_fn,
             skip=skip,
             x_col=x_col,
@@ -135,6 +153,13 @@ def compute_pairwise_trajectories(
 # ---------------------------------------------------------------------------
 
 
+def _min_immune_types(pair_mode: str) -> int:
+    """Minimum number of immune types required for the given pair mode."""
+    if pair_mode == "immune_immune":
+        return 2
+    return 1  # tumor_immune or all
+
+
 def _process_image(
     img_df: pd.DataFrame,
     *,
@@ -142,6 +167,7 @@ def _process_image(
     tumor_label: str,
     bandwidth: float,
     n_quantiles: int,
+    pair_mode: str,
     mask_fn,
     skip: set[str],
     x_col: str,
@@ -167,19 +193,22 @@ def _process_image(
 
     # Tumor KDE -> quantile masks
     tumor_kde = KernelDensity(bandwidth=bandwidth).fit(tumor_coords)
-    tumor_density = np.exp(tumor_kde.score_samples(grid_points)).reshape(grid_size, grid_size)
-    quantile_masks = mask_fn(tumor_density, n_quantiles)
+    tumor_density_flat = np.exp(tumor_kde.score_samples(grid_points))
+    tumor_density_2d = tumor_density_flat.reshape(grid_size, grid_size)
+    quantile_masks = mask_fn(tumor_density_2d, n_quantiles)
     masks_list = [quantile_masks[i] for i in range(n_quantiles)]
 
     # Identify immune types with enough cells for KDE
+    min_types = _min_immune_types(pair_mode)
     immune_types = sorted(
         ct
         for ct in img_df[cell_type_col].unique()
         if ct not in skip and (img_df[cell_type_col] == ct).sum() >= 2
     )
-    if len(immune_types) < 2:
+    if len(immune_types) < min_types:
         warnings.warn(
-            f"Image {image_id!r}: fewer than 2 immune types with >= 2 cells, " f"skipping.",
+            f"Image {image_id!r}: fewer than {min_types} immune type(s) with "
+            f">= 2 cells, skipping.",
             stacklevel=3,
         )
         return
@@ -191,22 +220,44 @@ def _process_image(
         kde = KernelDensity(bandwidth=bandwidth).fit(coords)
         immune_densities[ct] = np.exp(kde.score_samples(grid_points))
 
-    # Lee's L for every unordered pair across quantile bins
-    for ct_a, ct_b in combinations(immune_types, 2):
-        L_values = lees_L_sequence(
-            immune_densities[ct_a],
-            immune_densities[ct_b],
-            grid_points,
-            bandwidth,
-            masks_list,
-        )
-        pair_label = f"{ct_a} x {ct_b}"
-        for q, L in enumerate(L_values):
-            rows.append(
-                {
-                    image_id_col: image_id,
-                    IMMUNE_PAIR: pair_label,
-                    QUANTILE_BIN: q,
-                    LEES_L: L,
-                }
+    # --- Tumor–immune pairs ---
+    if pair_mode in ("tumor_immune", "all"):
+        for ct in immune_types:
+            L_values = lees_L_sequence(
+                tumor_density_flat,
+                immune_densities[ct],
+                grid_points,
+                bandwidth,
+                masks_list,
             )
+            pair_label = f"{tumor_label} x {ct}"
+            for q, L in enumerate(L_values):
+                rows.append(
+                    {
+                        image_id_col: image_id,
+                        IMMUNE_PAIR: pair_label,
+                        QUANTILE_BIN: q,
+                        LEES_L: L,
+                    }
+                )
+
+    # --- Immune–immune pairs ---
+    if pair_mode in ("immune_immune", "all"):
+        for ct_a, ct_b in combinations(immune_types, 2):
+            L_values = lees_L_sequence(
+                immune_densities[ct_a],
+                immune_densities[ct_b],
+                grid_points,
+                bandwidth,
+                masks_list,
+            )
+            pair_label = f"{ct_a} x {ct_b}"
+            for q, L in enumerate(L_values):
+                rows.append(
+                    {
+                        image_id_col: image_id,
+                        IMMUNE_PAIR: pair_label,
+                        QUANTILE_BIN: q,
+                        LEES_L: L,
+                    }
+                )
