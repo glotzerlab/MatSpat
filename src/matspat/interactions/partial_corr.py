@@ -10,29 +10,11 @@ import numpy as np
 from scipy.interpolate import griddata
 from scipy.spatial import distance
 
-from matspat.interactions.correlation import lees_L
+from matspat.interactions.correlation import _bisquare_kernel, _lees_L_from_kernel
 
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
-
-
-def _bisquare_kernel(distances: np.ndarray, bandwidth: float) -> np.ndarray:
-    """Bisquare spatial kernel weights (see correlation.py for formula).
-
-    Args:
-        distances: (N, N) pairwise Euclidean distance matrix.
-        bandwidth: Kernel bandwidth h.
-
-    Returns:
-        (N, N) weight matrix.
-
-        W_ij = (1 - (d_ij / h)^2)^2   if d_ij <= h,  else 0
-    """
-    weight_matrix = np.zeros_like(distances)
-    mask = distances <= bandwidth
-    weight_matrix[mask] = (1 - (distances[mask] / bandwidth) ** 2) ** 2
-    return weight_matrix
 
 
 def _weighted_ols_residuals(v: np.ndarray, z: np.ndarray, weights: np.ndarray) -> np.ndarray:
@@ -47,9 +29,9 @@ def _weighted_ols_residuals(v: np.ndarray, z: np.ndarray, weights: np.ndarray) -
         (N,) residuals: v - Z @ beta, where Z = [1 | z].
     """
     Z = np.column_stack([np.ones(len(z)), z])
-    W = np.diag(weights)
     # beta = (Z^T W Z)^{-1} Z^T W v
-    ZtW = Z.T @ W
+    # Use element-wise multiply instead of constructing a full N×N diagonal matrix
+    ZtW = Z.T * weights  # (2, N) — broadcasts weights across rows
     beta = np.linalg.solve(ZtW @ Z, ZtW @ v)
     return v - Z @ beta
 
@@ -154,8 +136,8 @@ def compute_gwpcor(
     residuals_x = _weighted_ols_residuals(x, z, w)
     residuals_y = _weighted_ols_residuals(y, z, w)
 
-    # Lee's L on the residuals
-    return lees_L(residuals_x, residuals_y, positions, bandwidth)
+    # Lee's L on the residuals — reuse the already-computed kernel matrix
+    return _lees_L_from_kernel(residuals_x, residuals_y, W)
 
 
 def gwpcor_sequence(

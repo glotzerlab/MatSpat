@@ -425,13 +425,15 @@ def _compute_katic_order_single_image(
         cell_type_col: df_filtered[cell_type_col].values,
     }
 
+    # Build neighbor list once for r_max mode (doesn't depend on k)
+    if neighbor_mode == "r_max":
+        nlist = fh.build_neighbor_list_r_max(box, positions_3d, r_max, exclude_ii=True)
+        valid_mask: np.ndarray = np.ones(len(positions_3d), dtype=bool)
+
     # Compute order parameter for each k
     for ki in k_list:
-        # Build neighbor list based on mode
-        if neighbor_mode == "r_max":
-            nlist = fh.build_neighbor_list_r_max(box, positions_3d, r_max, exclude_ii=True)
-            valid_mask: np.ndarray = np.ones(len(positions_3d), dtype=bool)
-        else:  # k_nearest
+        # Build neighbor list per k only for k_nearest mode (depends on k)
+        if neighbor_mode == "k_nearest":
             nlist, valid_mask = fh.build_neighbor_list_k_nearest(box, positions_3d, ki, r_max)
 
         # Compute hexatic order
@@ -596,19 +598,19 @@ def _count_neighbor_cell_types_single_image(
     # Get cell types for all included cells
     cell_types_array = df_filtered[cell_type_col].values
 
-    # Count neighbors by type for each cell
+    # Vectorized neighbor type counting: encode cell types as integers,
+    # then use np.add.at to scatter-add into a (n_cells, n_types) matrix.
     n_cells = len(df_filtered)
+    type_to_idx = {ct: j for j, ct in enumerate(types_to_count)}
+    neighbor_types = cell_types_array[nlist.point_indices]
+    neighbor_type_idx = np.array([type_to_idx.get(t, -1) for t in neighbor_types], dtype=int)
+    valid = neighbor_type_idx >= 0
     count_matrix: np.ndarray = np.zeros((n_cells, len(types_to_count)), dtype=int)
-
-    for i in range(n_cells):
-        # Get neighbors of cell i
-        mask = nlist.query_point_indices == i
-        neighbor_indices = nlist.point_indices[mask]
-        neighbor_types = cell_types_array[neighbor_indices]
-
-        # Count by type
-        for j, cell_type in enumerate(types_to_count):
-            count_matrix[i, j] = np.sum(neighbor_types == cell_type)
+    np.add.at(
+        count_matrix,
+        (nlist.query_point_indices[valid], neighbor_type_idx[valid]),
+        1,
+    )
 
     # Build result data
     result_data = {

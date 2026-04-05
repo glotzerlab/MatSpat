@@ -38,7 +38,7 @@ from matspat.density.kde import (
     get_cumulative_quantile_masks,
     get_marginal_quantile_masks,
 )
-from matspat.interactions.correlation import lees_L_sequence
+from matspat.interactions.correlation import lees_L_sequence, precompute_bin_kernels
 
 _QUANTILE_METHODS = {
     "marginal": get_marginal_quantile_masks,
@@ -220,6 +220,10 @@ def _process_image(
         kde = KernelDensity(bandwidth=bandwidth).fit(coords)
         immune_densities[ct] = np.exp(kde.score_samples(grid_points))
 
+    # Precompute the bisquare kernel matrix for each quantile bin once —
+    # the grid subsets are identical across all immune pairs.
+    bin_kernels = precompute_bin_kernels(grid_points, bandwidth, masks_list)
+
     # --- Tumor–immune pairs ---
     if pair_mode in ("tumor_immune", "all"):
         for ct in immune_types:
@@ -229,6 +233,7 @@ def _process_image(
                 grid_points,
                 bandwidth,
                 masks_list,
+                bin_kernels=bin_kernels,
             )
             pair_label = f"{tumor_label} x {ct}"
             for q, L in enumerate(L_values):
@@ -250,6 +255,7 @@ def _process_image(
                 grid_points,
                 bandwidth,
                 masks_list,
+                bin_kernels=bin_kernels,
             )
             pair_label = f"{ct_a} x {ct_b}"
             for q, L in enumerate(L_values):

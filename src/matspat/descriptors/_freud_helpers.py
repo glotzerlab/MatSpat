@@ -163,38 +163,40 @@ def build_neighbor_list_k_nearest(
         )
         return empty_nlist, valid_mask
 
-    # Filter to keep only k nearest neighbors for valid points
-    query_indices = []
-    point_indices = []
-    vectors = []
+    # Vectorized filtering: sort all pairs by (query_point, distance),
+    # then keep only the first k per query point.
+    all_qi = nlist.query_point_indices
+    all_pi = nlist.point_indices
+    all_dists = nlist.distances
 
-    for i in range(n_points):
-        if not valid_mask[i]:
-            continue
+    # Sort by query index first, then by distance within each group
+    order = np.lexsort((all_dists, all_qi))
+    sorted_qi = all_qi[order]
+    sorted_pi = all_pi[order]
 
-        # Get all neighbors of point i
-        mask = nlist.query_point_indices == i
-        neighbors = nlist.point_indices[mask]
-        neighbor_dists = nlist.distances[mask]
+    # Compute rank of each entry within its query-point group
+    group_sizes = np.bincount(sorted_qi, minlength=n_points)
+    group_starts = np.empty(n_points + 1, dtype=np.intp)
+    group_starts[0] = 0
+    np.cumsum(group_sizes, out=group_starts[1:])
+    within_group_rank = np.arange(len(sorted_qi)) - group_starts[sorted_qi]
 
-        # Sort by distance and keep k nearest
-        sorted_idx = np.argsort(neighbor_dists)[:k]
-        k_nearest_neighbors = neighbors[sorted_idx]
+    # Keep entries where rank < k and the query point is valid
+    keep = (within_group_rank < k) & valid_mask[sorted_qi]
 
-        # Compute vectors for k nearest neighbors
-        for neighbor_idx in k_nearest_neighbors:
-            vector = box.wrap(positions[neighbor_idx] - positions[i])
-            query_indices.append(i)
-            point_indices.append(neighbor_idx)
-            vectors.append(vector)
+    filt_qi = sorted_qi[keep]
+    filt_pi = sorted_pi[keep]
+
+    # Compute displacement vectors in batch
+    filt_vectors = box.wrap(positions[filt_pi] - positions[filt_qi])
 
     # Build filtered neighbor list
     filtered_nlist = freud.locality.NeighborList.from_arrays(
         n_points,
         n_points,
-        np.array(query_indices, dtype=np.uint32),
-        np.array(point_indices, dtype=np.uint32),
-        np.array(vectors, dtype=np.float32),
+        filt_qi.astype(np.uint32),
+        filt_pi.astype(np.uint32),
+        filt_vectors.astype(np.float32),
     )
 
     return filtered_nlist, valid_mask
