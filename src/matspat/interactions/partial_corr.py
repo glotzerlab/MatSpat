@@ -10,7 +10,11 @@ import numpy as np
 from scipy.interpolate import griddata
 from scipy.spatial import distance
 
-from matspat.interactions.correlation import _bisquare_kernel, _lees_L_from_kernel
+from matspat.interactions.correlation import (
+    _bisquare_kernel,
+    _lees_L_from_kernel,
+    precompute_bin_kernels,
+)
 
 # ---------------------------------------------------------------------------
 # Private helpers
@@ -147,6 +151,8 @@ def gwpcor_sequence(
     grid_coords: np.ndarray,
     bandwidth: float,
     quantile_masks: list[np.ndarray],
+    *,
+    bin_kernels: list[np.ndarray | None] | None = None,
 ) -> list[float]:
     """Compute GWPCor for each spatial quantile bin.
 
@@ -172,21 +178,40 @@ def gwpcor_sequence(
         bandwidth: Kernel bandwidth h.
         quantile_masks: Sequence of boolean arrays, one per quantile bin.
             Can be 2-D (grid_size, grid_size) or 1-D (M,).
+        bin_kernels: Precomputed kernel matrices from
+            :func:`~matspat.interactions.correlation.precompute_bin_kernels`.
+            If provided, skips distance and kernel computation per bin.
 
     Returns:
         List of GWPCor values of length ``len(quantile_masks)``.
         Bins with fewer than 3 grid points or constant z return ``nan``.
     """
     results = []
-    for mask in quantile_masks:
+    for i, mask in enumerate(quantile_masks):
         flat_mask = mask.ravel()
-        results.append(
-            compute_gwpcor(
-                x_full[flat_mask],
-                y_full[flat_mask],
-                z_full[flat_mask],
-                grid_coords[flat_mask],
-                bandwidth,
+        if bin_kernels is not None:
+            W = bin_kernels[i]
+            if W is None:
+                results.append(float(np.nan))
+                continue
+            x_sub = x_full[flat_mask]
+            y_sub = y_full[flat_mask]
+            z_sub = z_full[flat_mask]
+            if len(x_sub) < 3 or np.var(z_sub) == 0.0:
+                results.append(float(np.nan))
+                continue
+            w = W.sum(axis=1)
+            res_x = _weighted_ols_residuals(x_sub, z_sub, w)
+            res_y = _weighted_ols_residuals(y_sub, z_sub, w)
+            results.append(_lees_L_from_kernel(res_x, res_y, W))
+        else:
+            results.append(
+                compute_gwpcor(
+                    x_full[flat_mask],
+                    y_full[flat_mask],
+                    z_full[flat_mask],
+                    grid_coords[flat_mask],
+                    bandwidth,
+                )
             )
-        )
     return results

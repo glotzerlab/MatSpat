@@ -598,12 +598,14 @@ def _count_neighbor_cell_types_single_image(
     # Get cell types for all included cells
     cell_types_array = df_filtered[cell_type_col].values
 
-    # Vectorized neighbor type counting: encode cell types as integers,
+    # Vectorized neighbor type counting: pre-encode all cell types as integers,
     # then use np.add.at to scatter-add into a (n_cells, n_types) matrix.
     n_cells = len(df_filtered)
     type_to_idx = {ct: j for j, ct in enumerate(types_to_count)}
-    neighbor_types = cell_types_array[nlist.point_indices]
-    neighbor_type_idx = np.array([type_to_idx.get(t, -1) for t in neighbor_types], dtype=int)
+    cell_type_codes = np.full(n_cells, -1, dtype=int)
+    for ct, idx in type_to_idx.items():
+        cell_type_codes[cell_types_array == ct] = idx
+    neighbor_type_idx = cell_type_codes[nlist.point_indices]
     valid = neighbor_type_idx >= 0
     count_matrix: np.ndarray = np.zeros((n_cells, len(types_to_count)), dtype=int)
     np.add.at(
