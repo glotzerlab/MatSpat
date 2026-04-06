@@ -30,7 +30,7 @@ mamba install -c conda-forge freud  # freud must be installed via conda
 
 ## Getting Started
 
-See the [tutorial notebook](notebooks/tutorials/tutorial_happy_path_executed.ipynb) for a full pipeline walkthrough on built-in [example data](documents/datasets.md#example-dataset-synthetic).
+See the [tutorial notebook](notebooks/tutorials/tutorial_happy_path_executed.ipynb) for a full pipeline walkthrough on built-in [example data](documents/datasets.md#example-dataset-synthetic). For a real-data example using the Schürch et al. colorectal cancer CODEX dataset, see the [real data pipeline notebook](notebooks/tutorials/real_data_pipeline.ipynb).
 
 ## Input
 
