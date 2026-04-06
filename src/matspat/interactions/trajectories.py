@@ -62,6 +62,7 @@ def compute_pairwise_trajectories(
     image_id_col: str = IMAGE_ID,
     grid_size: int = DEFAULT_GRID_SIZE,
     exclude_types: list[str] | None = None,
+    min_tumor_cells: int = 2,
 ) -> pd.DataFrame:
     """Compute Lee's L trajectories across the tumor density gradient.
 
@@ -92,6 +93,10 @@ def compute_pairwise_trajectories(
         exclude_types: Cell types to exclude from pair computation
             (in addition to *tumor_label*, which is always excluded from the
             immune set).
+        min_tumor_cells: Minimum number of tumor cells required per image.
+            Images below this threshold are skipped.  Default is 2 (the
+            KDE minimum); set higher (e.g. 100) to exclude images whose
+            sparse tumor KDE produces unreliable density gradients.
 
     Returns:
         Long-format DataFrame with columns:
@@ -142,6 +147,7 @@ def compute_pairwise_trajectories(
             cell_type_col=cell_type_col,
             image_id_col=image_id_col,
             grid_size=grid_size,
+            min_tumor_cells=min_tumor_cells,
             rows=rows,
         )
 
@@ -175,14 +181,16 @@ def _process_image(
     cell_type_col: str,
     image_id_col: str,
     grid_size: int,
+    min_tumor_cells: int,
     rows: list[dict],
 ) -> None:
     """Compute pairwise trajectories for a single image."""
     tumor_coords = img_df.loc[img_df[cell_type_col] == tumor_label, [x_col, y_col]].values
 
-    if tumor_coords.shape[0] < 2:
+    if tumor_coords.shape[0] < min_tumor_cells:
         warnings.warn(
-            f"Image {image_id!r}: fewer than 2 tumor cells, skipping.",
+            f"Image {image_id!r}: {tumor_coords.shape[0]} tumor cells "
+            f"(< min_tumor_cells={min_tumor_cells}), skipping.",
             stacklevel=3,
         )
         return

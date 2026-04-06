@@ -333,7 +333,7 @@ class TestEdgeCases:
         drop_idx = df[tumor_mask].index[1:]
         df = df.drop(drop_idx)
 
-        with pytest.warns(UserWarning, match="fewer than 2 tumor cells"):
+        with pytest.warns(UserWarning, match="tumor cells.*min_tumor_cells"):
             result = compute_pairwise_trajectories(
                 df,
                 tumor_label="Tumor",

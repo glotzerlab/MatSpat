@@ -217,28 +217,3 @@ def filter_and_extract_data(
         focus_mask = (df_filtered[cell_type_col] == focus_cell_type).values
 
     return df_filtered, positions, focus_mask
-
-
-def warn_if_few_cells(n_cells: int, threshold: int = 2) -> bool:
-    """Warn and return False if too few cells.
-
-    Parameters
-    ----------
-    n_cells : int
-        Number of cells.
-    threshold : int
-        Minimum required cells.
-
-    Returns:
-    -------
-    bool
-        True if enough cells, False otherwise.
-    """
-    if n_cells < threshold:
-        warnings.warn(
-            f"Fewer than {threshold} cells (got {n_cells}). Skipping.",
-            UserWarning,
-            stacklevel=4,
-        )
-        return False
-    return True
