@@ -231,3 +231,9 @@ Thumbs.db
 *.bak
 *.tmp
 summaries/
+
+# Local data, outputs, and generated figures (not for version control)
+data/
+figures/
+notebooks/output.png
+output*.png
