@@ -39,3 +39,9 @@ Any spatial point-pattern dataset with x/y coordinates, a type label, and an ima
 ## Output
 
 Per-image disease classification with confidence intervals, confusion matrices, and per-class log-likelihoods. Intermediate outputs (trajectories, descriptors, sequences) are all accessible as DataFrames for custom downstream analysis.
+
+## License
+
+Copyright The Regents of the University of Michigan.
+
+Released under the BSD 3-Clause License — see [LICENSE](LICENSE).
