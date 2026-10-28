@@ -1,10 +1,21 @@
-"""Partial correlation computations using geographically weighted methods.
+"""Covariate-adjusted Lee's L, and interpolation of cell-level covariates onto the grid.
+
+``partial_lees_L`` regresses a covariate z out of both variables with one weighted
+OLS fit per region, then computes Lee's L on the residuals. It was previously
+called GWPCor; it is not a geographically weighted partial correlation in the
+strict (local) sense. For that, see
+:func:`~matspat.interactions.local_corr.gw_partial_corr`.
 
 Public functions:
     interpolate_to_grid(cell_positions, cell_values, grid_coords, method) -> ndarray
-    compute_gwpcor(x, y, z, positions, bandwidth) -> float
-    gwpcor_sequence(x_full, y_full, z_full, grid_coords, bandwidth, quantile_masks) -> list[float]
+    partial_lees_L(x, y, z, positions, bandwidth) -> float
+    partial_lees_L_sequence(x_full, y_full, z_full, grid_coords, bandwidth,
+                            quantile_masks) -> list[float]
+
+``compute_gwpcor`` and ``gwpcor_sequence`` remain as aliases of the last two.
 """
+
+from __future__ import annotations
 
 import numpy as np
 from scipy.interpolate import griddata
@@ -12,8 +23,8 @@ from scipy.spatial import distance
 
 from matspat.interactions.correlation import (
     _bisquare_kernel,
+    _finite_in_bin,
     _lees_L_from_kernel,
-    precompute_bin_kernels,
 )
 
 # ---------------------------------------------------------------------------
@@ -70,15 +81,22 @@ def interpolate_to_grid(
     Returns:
         (M,) interpolated values on the grid.  Grid points outside the
         convex hull of *cell_positions* are filled via nearest-neighbor
-        interpolation.
+        interpolation.  Cells with non-finite values (e.g. Voronoi boundary
+        cells, which are nan) are dropped first, so the result has no nan.
 
     Raises:
         ValueError: If *method* is not one of ``"linear"``, ``"cubic"``,
-            or ``"nearest"``.
+            or ``"nearest"``, or no cell has a finite value.
     """
     valid_methods = {"linear", "cubic", "nearest"}
     if method not in valid_methods:
         raise ValueError(f"method must be one of {valid_methods}, got {method!r}")
+
+    cell_values = np.asarray(cell_values, dtype=float)
+    finite = np.isfinite(cell_values)
+    if not finite.any():
+        raise ValueError("cell_values has no finite entries")
+    cell_positions, cell_values = np.asarray(cell_positions)[finite], cell_values[finite]
 
     z_grid = griddata(cell_positions, cell_values, grid_coords, method=method)
 
@@ -93,17 +111,17 @@ def interpolate_to_grid(
     return z_grid
 
 
-def compute_gwpcor(
+def partial_lees_L(
     x: np.ndarray,
     y: np.ndarray,
     z: np.ndarray,
     positions: np.ndarray,
     bandwidth: float,
 ) -> float:
-    """Geographically Weighted Partial Correlation (GWPCor).
+    """Covariate-adjusted Lee's L (formerly called GWPCor).
 
-    Measures the spatial correlation between x and y after removing the linear
-    effect of covariate z. Uses the same bisquare kernel as Lee's L.
+    Lee's L between x and y after removing the linear effect of covariate z
+    from both with one weighted OLS fit. Uses the same bisquare kernel as Lee's L.
 
     The key formula for weighted regression weights:
 
@@ -121,7 +139,7 @@ def compute_gwpcor(
         bandwidth: Kernel bandwidth h.
 
     Returns:
-        GWPCor value in [-1, 1], or nan if fewer than 3 points or z has zero variance.
+        Adjusted Lee's L in [-1, 1], or nan if fewer than 3 points or z has zero variance.
     """
     if len(x) < 3:
         return float(np.nan)
@@ -144,7 +162,7 @@ def compute_gwpcor(
     return _lees_L_from_kernel(residuals_x, residuals_y, W)
 
 
-def gwpcor_sequence(
+def partial_lees_L_sequence(
     x_full: np.ndarray,
     y_full: np.ndarray,
     z_full: np.ndarray,
@@ -154,7 +172,7 @@ def gwpcor_sequence(
     *,
     bin_kernels: list[np.ndarray | None] | None = None,
 ) -> list[float]:
-    """Compute GWPCor for each spatial quantile bin.
+    """Compute covariate-adjusted Lee's L for each spatial quantile bin.
 
     Mirrors :func:`~matspat.interactions.correlation.lees_L_sequence` but
     controls for covariate *z* (e.g. a structural descriptor interpolated
@@ -183,20 +201,23 @@ def gwpcor_sequence(
             If provided, skips distance and kernel computation per bin.
 
     Returns:
-        List of GWPCor values of length ``len(quantile_masks)``.
-        Bins with fewer than 3 grid points or constant z return ``nan``.
+        List of adjusted Lee's L values of length ``len(quantile_masks)``.
+        Grid points where x, y or z is non-finite are left out. Bins with
+        fewer than 3 remaining grid points or constant z return ``nan``.
     """
     results = []
     for i, mask in enumerate(quantile_masks):
         flat_mask = mask.ravel()
+        finite = _finite_in_bin(flat_mask, x_full, y_full, z_full)
         if bin_kernels is not None:
             W = bin_kernels[i]
             if W is None:
                 results.append(float(np.nan))
                 continue
-            x_sub = x_full[flat_mask]
-            y_sub = y_full[flat_mask]
-            z_sub = z_full[flat_mask]
+            W = W[np.ix_(finite, finite)]
+            x_sub = x_full[flat_mask][finite]
+            y_sub = y_full[flat_mask][finite]
+            z_sub = z_full[flat_mask][finite]
             if len(x_sub) < 3 or np.var(z_sub) == 0.0:
                 results.append(float(np.nan))
                 continue
@@ -206,12 +227,17 @@ def gwpcor_sequence(
             results.append(_lees_L_from_kernel(res_x, res_y, W))
         else:
             results.append(
-                compute_gwpcor(
-                    x_full[flat_mask],
-                    y_full[flat_mask],
-                    z_full[flat_mask],
-                    grid_coords[flat_mask],
+                partial_lees_L(
+                    x_full[flat_mask][finite],
+                    y_full[flat_mask][finite],
+                    z_full[flat_mask][finite],
+                    grid_coords[flat_mask][finite],
                     bandwidth,
                 )
             )
     return results
+
+
+# Backward-compatible names: this statistic was previously called GWPCor
+compute_gwpcor = partial_lees_L
+gwpcor_sequence = partial_lees_L_sequence

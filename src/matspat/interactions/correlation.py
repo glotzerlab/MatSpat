@@ -5,6 +5,8 @@ Public functions:
     lees_L_sequence(x_full, y_full, grid_coords, bandwidth, quantile_masks) -> list[float]
 """
 
+from __future__ import annotations
+
 import numpy as np
 from scipy.spatial import distance
 
@@ -36,9 +38,7 @@ def _bisquare_kernel(distances: np.ndarray, bandwidth: float) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def _lees_L_from_kernel(
-    x: np.ndarray, y: np.ndarray, W: np.ndarray
-) -> float:
+def _lees_L_from_kernel(x: np.ndarray, y: np.ndarray, W: np.ndarray) -> float:
     """Core Lee's L computation from precomputed kernel matrix.
 
     Args:
@@ -90,6 +90,23 @@ def lees_L(x: np.ndarray, y: np.ndarray, positions: np.ndarray, bandwidth: float
     distances = distance.cdist(positions, positions, metric="euclidean")
     W = _bisquare_kernel(distances, bandwidth)
     return _lees_L_from_kernel(x, y, W)
+
+
+def _finite_in_bin(flat_mask: np.ndarray, *fields: np.ndarray) -> np.ndarray:
+    """Which points of a bin have finite values in every field.
+
+    Args:
+        flat_mask: (M,) boolean mask selecting the bin's grid points.
+        *fields: (M,) arrays over the full grid.
+
+    Returns:
+        (flat_mask.sum(),) boolean array, aligned with the bin's points (and
+        with the rows of its kernel from :func:`precompute_bin_kernels`).
+    """
+    ok = np.ones(int(flat_mask.sum()), dtype=bool)
+    for f in fields:
+        ok &= np.isfinite(f[flat_mask])
+    return ok
 
 
 def precompute_bin_kernels(

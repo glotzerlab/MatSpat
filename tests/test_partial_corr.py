@@ -8,6 +8,8 @@ from matspat.interactions.partial_corr import (
     compute_gwpcor,
     gwpcor_sequence,
     interpolate_to_grid,
+    partial_lees_L,
+    partial_lees_L_sequence,
 )
 
 rng = np.random.default_rng(42)
@@ -281,3 +283,25 @@ class TestGwpcorSequence:
             if np.isnan(gwp) or np.isnan(raw):
                 continue
             assert abs(gwp) <= abs(raw) + 1e-10
+
+
+def test_legacy_gwpcor_names_are_aliases():
+    assert compute_gwpcor is partial_lees_L
+    assert gwpcor_sequence is partial_lees_L_sequence
+
+
+class TestInterpolateNonFinite:
+    def test_nan_cells_dropped(self):
+        rng = np.random.default_rng(0)
+        pos = rng.uniform(0, 10, size=(60, 2))
+        vals = pos[:, 0].copy()
+        vals[:10] = np.nan
+        grid = np.column_stack([np.linspace(1, 9, 20), np.linspace(1, 9, 20)])
+        z = interpolate_to_grid(pos, vals, grid)
+        assert np.isfinite(z).all()
+        np.testing.assert_allclose(z, interpolate_to_grid(pos[10:], vals[10:], grid))
+
+    def test_all_nan_raises(self):
+        pos = np.random.default_rng(0).uniform(size=(10, 2))
+        with pytest.raises(ValueError, match="finite"):
+            interpolate_to_grid(pos, np.full(10, np.nan), pos)
