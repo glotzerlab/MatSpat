@@ -36,7 +36,12 @@ from matspat.config import (
 
 @dataclass
 class ClassificationResult:
-    """Container for HMM classification outputs and evaluation metrics."""
+    """Container for HMM classification outputs and evaluation metrics.
+
+    ``scores`` holds one decision score per test sample: the log-likelihood
+    ratio ``log p(x | classes[1]) - log p(x | classes[0])``. Positive values
+    favour ``classes[1]``.
+    """
 
     predicted_labels: dict[str, int]
     log_likelihoods: dict[str, dict[int, float]]
@@ -45,6 +50,7 @@ class ClassificationResult:
     metrics: dict[str, float] | None = None
     confusion_matrix: np.ndarray | None = None
     confidence_intervals: dict[str, tuple[float, float]] = field(default_factory=dict)
+    scores: dict[str, float] = field(default_factory=dict)
 
 
 def train_class_hmm(
@@ -130,14 +136,26 @@ def _compute_metrics(
     y_pred: np.ndarray,
     y_prob: np.ndarray,
     *,
+    pos_label: int = 1,
     n_bootstraps: int = DEFAULT_N_BOOTSTRAPS,
     ci_alpha: float = DEFAULT_CI_ALPHA,
 ) -> tuple[dict[str, float], dict[str, tuple[float, float]]]:
     """Compute classification metrics and bootstrap confidence intervals.
 
+    Args:
+        y_true: True labels.
+        y_pred: Predicted labels.
+        y_prob: Scores for *pos_label* (higher favours *pos_label*).
+        pos_label: The positive class for F1, sensitivity and AUROC.
+        n_bootstraps: Number of bootstrap samples for CIs.
+        ci_alpha: Significance level for CIs.
+
     Returns:
         Tuple of (metrics_dict, ci_dict).
     """
+    # Binarise so every metric uses the same positive class, whatever the labels are
+    y_true = (np.asarray(y_true) == pos_label).astype(int)
+    y_pred = (np.asarray(y_pred) == pos_label).astype(int)
     metrics = {
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
@@ -251,6 +269,7 @@ def classify(
         log_likelihoods=log_lls,
         models=models,
         classes=classes,
+        scores={k: ll[int(classes[1])] - ll[int(classes[0])] for k, ll in log_lls.items()},
     )
 
     # Compute metrics if test labels provided
@@ -272,6 +291,7 @@ def classify(
             y_true,
             y_pred,
             y_prob,
+            pos_label=int(classes[1]),
             n_bootstraps=n_bootstraps,
             ci_alpha=ci_alpha,
         )

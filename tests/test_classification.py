@@ -10,6 +10,7 @@ from matspat.classification import (
     build_sequences_from_dict,
     classify,
     classify_patients,
+    evaluation,
     extract_labels,
     score_sequence,
     split_and_classify,
@@ -287,10 +288,127 @@ class TestSplitAndClassify:
         assert r1.predicted_labels == r2.predicted_labels
 
 
+def _make_patient_data(
+    n_patients_per_class: int = 8, images_per_patient: int = 3
+) -> tuple[dict[str, np.ndarray], dict[str, int], dict[str, str]]:
+    """Separable sequences grouped into patients with several images each."""
+    seqs, labels = _make_separable_sequences(n_patients_per_class * images_per_patient)
+    patient_map = {}
+    for k in seqs:
+        cls, i = k.split("_")
+        patient_map[k] = f"{cls}_p{int(i) // images_per_patient}"
+    return seqs, labels, patient_map
+
+
 class TestClassifyPatients:
-    def test_stub_raises(self) -> None:
-        with pytest.raises(NotImplementedError):
-            classify_patients({}, {}, {})
+    def test_end_to_end(self) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        result = classify_patients(
+            seqs, labels, patient_map, n_states=2, n_replicates=1, n_bootstraps=10
+        )
+        assert result.metrics is not None
+        assert result.metrics["auroc"] > 0.9
+        assert set(result.predicted_labels) == set(result.scores) == set(result.patient_labels)
+        # Every image of a test patient is scored at image level
+        test_images = {k for k, p in patient_map.items() if p in result.scores}
+        assert set(result.image_result.scores) == test_images
+
+    def test_no_patient_in_both_splits(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        seen: dict[str, set[str]] = {}
+
+        def spy(train_seqs, train_labs, test_seqs, **kwargs):
+            seen["train"], seen["test"] = set(train_seqs), set(test_seqs)
+            return classify(train_seqs, train_labs, test_seqs, **kwargs)
+
+        monkeypatch.setattr(evaluation, "classify", spy)
+        result = classify_patients(
+            seqs, labels, patient_map, n_states=2, n_replicates=1, n_bootstraps=0
+        )
+        train_patients = {patient_map[k] for k in seen["train"]}
+        test_patients = {patient_map[k] for k in seen["test"]}
+        assert train_patients and test_patients
+        assert not train_patients & test_patients
+        assert test_patients == set(result.scores)
+        # Every image of every test patient is in the test set
+        assert seen["test"] == {k for k, p in patient_map.items() if p in test_patients}
+
+    @pytest.mark.parametrize("aggregate,fn", [("mean", np.mean), ("median", np.median)])
+    def test_patient_score_aggregates_image_scores(self, aggregate: str, fn) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        result = classify_patients(
+            seqs,
+            labels,
+            patient_map,
+            aggregate=aggregate,
+            n_states=2,
+            n_replicates=1,
+            n_bootstraps=0,
+        )
+        for p, s in result.scores.items():
+            imgs = [k for k, q in patient_map.items() if q == p]
+            assert s == pytest.approx(fn([result.image_result.scores[k] for k in imgs]))
+            assert result.predicted_labels[p] == int(s > 0)
+
+    def test_non_01_labels(self) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        labels = {k: v + 1 for k, v in labels.items()}  # classes {1, 2}
+        result = classify_patients(
+            seqs, labels, patient_map, n_states=2, n_replicates=1, n_bootstraps=0
+        )
+        assert set(result.predicted_labels.values()) <= {1, 2}
+        assert result.metrics is not None
+        assert result.metrics["sensitivity"] == pytest.approx(1.0)
+        assert result.metrics["auroc"] == pytest.approx(1.0)
+
+    def test_one_class_in_test_raises(self) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        with pytest.raises(ValueError, match="one class"):
+            classify_patients(seqs, labels, patient_map, test_size=1, stratify=False)
+
+    def test_kwargs_rejected_for_time_series(self) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        with pytest.raises(ValueError, match="only used by 'hmm'"):
+            classify_patients(seqs, labels, patient_map, method="quant", n_states=2)
+
+    def test_mixed_labels_raise(self) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        patient_map["c1_0"] = patient_map["c0_0"]
+        with pytest.raises(ValueError, match="different labels"):
+            classify_patients(seqs, labels, patient_map)
+
+    def test_missing_patient_raises(self) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        del patient_map["c0_0"]
+        with pytest.raises(ValueError, match="no patient"):
+            classify_patients(seqs, labels, patient_map)
+
+    def test_unknown_method_raises(self) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        with pytest.raises(ValueError, match="method"):
+            classify_patients(seqs, labels, patient_map, method="lstm")
+
+    def test_unknown_aggregate_raises(self) -> None:
+        seqs, labels, patient_map = _make_patient_data()
+        with pytest.raises(ValueError, match="aggregate"):
+            classify_patients(seqs, labels, patient_map, aggregate="max")
+
+
+class TestClassifyScores:
+    def test_scores_are_log_likelihood_ratios(self) -> None:
+        seqs, labels = _make_separable_sequences()
+        result = classify(seqs, labels, seqs, n_states=2, n_replicates=1)
+        for k, ll in result.log_likelihoods.items():
+            assert result.scores[k] == pytest.approx(ll[1] - ll[0])
+            assert result.predicted_labels[k] == int(result.scores[k] > 0)
+
+    def test_non_01_labels_metrics(self) -> None:
+        seqs, labels = _make_separable_sequences()
+        labels = {k: 2 * v for k, v in labels.items()}  # classes {0, 2}
+        result = classify(seqs, labels, seqs, test_labels=labels, n_states=2, n_replicates=1)
+        assert result.metrics is not None
+        assert result.metrics["sensitivity"] == pytest.approx(1.0)
+        assert result.metrics["f1_score"] == pytest.approx(1.0)
 
 
 # ===========================================================================
