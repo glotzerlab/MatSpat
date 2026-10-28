@@ -6,12 +6,14 @@ build_grid      Build a regular 2-D evaluation grid from coordinate bounds.
 compute_kde     Fit a Gaussian KDE for one cell type and evaluate on a grid.
 get_marginal_quantile_masks   Non-overlapping equal-mass density bins.
 get_cumulative_quantile_masks Nested cumulative density regions.
+tissue_mask     Flag grid points that lie within tissue (near at least one cell).
 """
 
 from __future__ import annotations
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.spatial import cKDTree
 from sklearn.neighbors import KernelDensity
 
 from matspat.config import DEFAULT_GRID_SIZE
@@ -47,6 +49,8 @@ def compute_kde(
     coords: NDArray[np.floating],
     bandwidth: float,
     grid_size: int = DEFAULT_GRID_SIZE,
+    *,
+    grid: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]] | None = None,
 ) -> dict[str, NDArray[np.floating]]:
     """Fit a Gaussian KDE on *coords* and evaluate on a regular grid.
 
@@ -61,6 +65,11 @@ def compute_kde(
             DataFrame to the desired cell type before extracting coordinates.
         bandwidth: KDE bandwidth in the same spatial units as *coords*.
         grid_size: Number of points per grid axis.
+        grid: Optional pre-built grid tuple ``(xs, ys, grid_points)`` as
+            returned by :func:`build_grid`.  When provided, the KDE is fit
+            on *coords* but evaluated on this shared grid instead of
+            building a new one from *coords*.  This is useful when multiple
+            cell types must be evaluated on the same grid.
 
     Returns:
         Dict with keys:
@@ -74,42 +83,96 @@ def compute_kde(
     Raises:
         IndexError: If *coords* is empty.
     """
-    xs, ys, grid = build_grid(coords, grid_size)
+    if grid is not None:
+        xs, ys, grid_points = grid
+    else:
+        xs, ys, grid_points = build_grid(coords, grid_size)
     kde = KernelDensity(bandwidth=bandwidth).fit(coords)
-    density = np.exp(kde.score_samples(grid)).reshape(len(ys), len(xs))
-    return {"density": density, "grid_coords": grid, "xs": xs, "ys": ys}
+    density = np.exp(kde.score_samples(grid_points)).reshape(len(ys), len(xs))
+    return {"density": density, "grid_coords": grid_points, "xs": xs, "ys": ys}
+
+
+def tissue_mask(
+    coords: NDArray[np.floating],
+    grid_points: NDArray[np.floating],
+    max_distance: float,
+) -> NDArray[np.bool_]:
+    """Flag grid points that lie within tissue.
+
+    A grid point is considered in-tissue if at least one cell lies within
+    *max_distance* of it.  Grid points spanning empty space (e.g. the corners
+    of a bounding box around a round TMA core) are flagged ``False``.
+
+    Args:
+        coords: (N, 2) cell coordinates.
+        grid_points: (M, 2) grid coordinates (e.g. from :func:`build_grid`).
+        max_distance: Maximum distance to the nearest cell, in the same
+            spatial units as *coords*.
+
+    Returns:
+        (M,) boolean array, ``True`` for in-tissue grid points.
+    """
+    dist, _ = cKDTree(coords).query(grid_points)
+    return np.asarray(dist <= max_distance)
+
+
+def _valid_mask(
+    density: NDArray[np.floating], valid: NDArray[np.bool_] | None
+) -> NDArray[np.bool_]:
+    """Boolean validity mask shaped like *density*; all True when *valid* is None."""
+    if valid is None:
+        return np.ones(density.shape, dtype=bool)
+    valid_arr = np.asarray(valid, dtype=bool).reshape(density.shape)
+    if not valid_arr.any():
+        raise ValueError("valid mask has no True entries")
+    return valid_arr
 
 
 def get_marginal_quantile_masks(
     density: NDArray[np.floating],
     n_quantiles: int,
+    *,
+    valid: NDArray[np.bool_] | None = None,
 ) -> dict[int, NDArray[np.bool_]]:
-    """Split *density* into *n_quantiles* non-overlapping bins of equal mass.
+    """Split *density* into *n_quantiles* non-overlapping equal-count bins.
+
+    Bin edges are quantiles of the density values over grid points, so each
+    bin contains (approximately) the same number of grid points.
 
     Args:
         density: 2-D density array (e.g. from :func:`compute_kde`).
         n_quantiles: Number of bins.
+        valid: Optional boolean array (same shape as *density*).  When given,
+            quantile edges are computed over valid points only and every mask
+            excludes invalid points (e.g. off-tissue grid points from
+            :func:`tissue_mask`).
 
     Returns:
         Dict mapping bin index (0-based) to a boolean mask of the same shape
         as *density*.
+
+    Raises:
+        ValueError: If *valid* has no True entries.
     """
-    flat = density.flatten()
+    valid_arr = _valid_mask(density, valid)
+    flat = density[valid_arr]
     edges = np.quantile(flat, np.linspace(0, 1, n_quantiles + 1))
     masks: dict[int, NDArray[np.bool_]] = {}
     for i in range(n_quantiles):
         low, high = edges[i], edges[i + 1]
         if i < n_quantiles - 1:
-            masks[i] = (density >= low) & (density < high)
+            masks[i] = (density >= low) & (density < high) & valid_arr
         else:
             # last bin includes the upper edge
-            masks[i] = (density >= low) & (density <= high)
+            masks[i] = (density >= low) & (density <= high) & valid_arr
     return masks
 
 
 def get_cumulative_quantile_masks(
     density: NDArray[np.floating],
     n_quantiles: int,
+    *,
+    valid: NDArray[np.bool_] | None = None,
 ) -> dict[int, NDArray[np.bool_]]:
     """Create nested cumulative density masks.
 
@@ -119,15 +182,22 @@ def get_cumulative_quantile_masks(
     Args:
         density: 2-D density array.
         n_quantiles: Number of cumulative thresholds.
+        valid: Optional boolean array (same shape as *density*).  When given,
+            thresholds are computed over valid points only and every mask
+            excludes invalid points.
 
     Returns:
         Dict mapping index (0-based) to boolean mask.
+
+    Raises:
+        ValueError: If *valid* has no True entries.
     """
+    valid_arr = _valid_mask(density, valid)
     thresholds = np.quantile(
-        density.flatten(),
+        density[valid_arr],
         np.linspace(1, n_quantiles, n_quantiles) / n_quantiles,
     )
     masks: dict[int, NDArray[np.bool_]] = {}
     for i, thr in enumerate(thresholds):
-        masks[i] = density <= thr
+        masks[i] = (density <= thr) & valid_arr
     return masks

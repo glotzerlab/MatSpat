@@ -388,3 +388,44 @@ class TestEdgeCases:
             n_quantiles=2,
         )
         assert result.empty
+
+
+# ---------------------------------------------------------------------------
+# Tissue mask
+# ---------------------------------------------------------------------------
+
+
+class TestTissueMask:
+    """Tests for tissue_mask_distance."""
+
+    def test_none_matches_default(self):
+        df = _make_spatial_df()
+        base = compute_pairwise_trajectories(df, tumor_label="Tumor", bandwidth=10.0, n_quantiles=4)
+        masked = compute_pairwise_trajectories(
+            df, tumor_label="Tumor", bandwidth=10.0, n_quantiles=4, tissue_mask_distance=None
+        )
+        pd.testing.assert_frame_equal(base, masked)
+
+    def test_mask_changes_values_and_keeps_shape(self):
+        df = _make_spatial_df()
+        base = compute_pairwise_trajectories(df, tumor_label="Tumor", bandwidth=10.0, n_quantiles=4)
+        masked = compute_pairwise_trajectories(
+            df, tumor_label="Tumor", bandwidth=10.0, n_quantiles=4, tissue_mask_distance=5.0
+        )
+        assert masked.shape == base.shape
+        assert not np.allclose(base["lees_L"], masked["lees_L"], equal_nan=True)
+
+    @pytest.mark.parametrize("method", ["marginal", "cumulative"])
+    def test_mask_values_bounded(self, method):
+        df = _make_spatial_df()
+        masked = compute_pairwise_trajectories(
+            df,
+            tumor_label="Tumor",
+            bandwidth=10.0,
+            n_quantiles=4,
+            quantile_method=method,
+            tissue_mask_distance=5.0,
+        )
+        vals = masked["lees_L"].dropna()
+        assert len(vals) > 0
+        assert np.all(np.abs(vals) <= 1.0 + 1e-9)

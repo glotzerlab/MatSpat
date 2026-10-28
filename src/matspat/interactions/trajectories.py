@@ -37,6 +37,7 @@ from matspat.density.kde import (
     build_grid,
     get_cumulative_quantile_masks,
     get_marginal_quantile_masks,
+    tissue_mask,
 )
 from matspat.interactions.correlation import lees_L_sequence, precompute_bin_kernels
 
@@ -63,6 +64,7 @@ def compute_pairwise_trajectories(
     grid_size: int = DEFAULT_GRID_SIZE,
     exclude_types: list[str] | None = None,
     min_tumor_cells: int = 2,
+    tissue_mask_distance: float | None = None,
 ) -> pd.DataFrame:
     """Compute Lee's L trajectories across the tumor density gradient.
 
@@ -97,6 +99,11 @@ def compute_pairwise_trajectories(
             Images below this threshold are skipped.  Default is 2 (the
             KDE minimum); set higher (e.g. 100) to exclude images whose
             sparse tumor KDE produces unreliable density gradients.
+        tissue_mask_distance: If given, grid points farther than this distance
+            from every cell are treated as off-tissue: they are excluded from
+            the quantile thresholds and from every bin.  Without a mask, the
+            empty corners of the bounding-box grid fall into the lowest
+            tumor-density bins.  ``None`` (default) keeps the full grid.
 
     Returns:
         Long-format DataFrame with columns:
@@ -148,6 +155,7 @@ def compute_pairwise_trajectories(
             image_id_col=image_id_col,
             grid_size=grid_size,
             min_tumor_cells=min_tumor_cells,
+            tissue_mask_distance=tissue_mask_distance,
             rows=rows,
         )
 
@@ -166,6 +174,19 @@ def _min_immune_types(pair_mode: str) -> int:
     return 1  # tumor_immune or all
 
 
+def _grid_tissue_mask(
+    coords: np.ndarray,
+    grid_points: np.ndarray,
+    grid_size: int,
+    max_distance: float | None,
+) -> np.ndarray | None:
+    """2-D in-tissue mask for the grid, or None when masking is disabled."""
+    if max_distance is None:
+        return None
+    mask: np.ndarray = np.asarray(tissue_mask(coords, grid_points, max_distance), dtype=bool)
+    return mask.reshape(grid_size, grid_size)
+
+
 def _process_image(
     img_df: pd.DataFrame,
     *,
@@ -182,6 +203,7 @@ def _process_image(
     image_id_col: str,
     grid_size: int,
     min_tumor_cells: int,
+    tissue_mask_distance: float | None,
     rows: list[dict],
 ) -> None:
     """Compute pairwise trajectories for a single image."""
@@ -203,7 +225,8 @@ def _process_image(
     tumor_kde = KernelDensity(bandwidth=bandwidth).fit(tumor_coords)
     tumor_density_flat = np.exp(tumor_kde.score_samples(grid_points))
     tumor_density_2d = tumor_density_flat.reshape(grid_size, grid_size)
-    quantile_masks = mask_fn(tumor_density_2d, n_quantiles)
+    valid = _grid_tissue_mask(all_coords, grid_points, grid_size, tissue_mask_distance)
+    quantile_masks = mask_fn(tumor_density_2d, n_quantiles, valid=valid)
     masks_list = [quantile_masks[i] for i in range(n_quantiles)]
 
     # Identify immune types with enough cells for KDE

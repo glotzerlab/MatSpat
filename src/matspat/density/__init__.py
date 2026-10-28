@@ -5,6 +5,7 @@ from .kde import (
     compute_kde,
     get_cumulative_quantile_masks,
     get_marginal_quantile_masks,
+    tissue_mask,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "compute_kde",
     "get_cumulative_quantile_masks",
     "get_marginal_quantile_masks",
+    "tissue_mask",
 ]
